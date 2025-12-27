@@ -16,7 +16,9 @@ import {
   Music,
   ChevronRight,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Key,
+  ExternalLink
 } from 'lucide-react';
 
 import { GlobalSettings, AudioBlock, VOICES, ToneLabel } from './types';
@@ -45,6 +47,8 @@ export default function App() {
   const [blocks, setBlocks] = useState<AudioBlock[]>([createInitialBlock()]);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [currentPlayingIndex, setCurrentPlayingIndex] = useState<number | null>(null);
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const isStoppingRef = useRef(false);
@@ -53,10 +57,31 @@ export default function App() {
     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
       sampleRate: 24000
     });
+
+    // Check for API Key on load
+    const checkKey = async () => {
+      if ((window as any).aistudio?.hasSelectedApiKey) {
+        const selected = await (window as any).aistudio.hasSelectedApiKey();
+        setHasApiKey(selected);
+      } else if (process.env.API_KEY) {
+        setHasApiKey(true);
+      }
+    };
+    checkKey();
+
     return () => {
       audioContextRef.current?.close();
     };
   }, []);
+
+  const handleOpenKeySelector = async () => {
+    if ((window as any).aistudio?.openSelectKey) {
+      await (window as any).aistudio.openSelectKey();
+      setHasApiKey(true); // Assume success per instructions to avoid race condition
+    } else {
+      alert("Este ambiente não suporta seleção dinâmica de chaves. Certifique-se de que a variável API_KEY está configurada.");
+    }
+  };
 
   const handleSpeedChange = (delta: number) => {
     setSettings(prev => ({
@@ -77,7 +102,11 @@ export default function App() {
       source.connect(audioContextRef.current.destination);
       source.start();
     } catch (err: any) {
-      alert(`Erro na prévia: ${err.message || 'Erro desconhecido'}`);
+      if (err.message?.includes("API key")) {
+        handleOpenKeySelector();
+      } else {
+        alert(`Erro na prévia: ${err.message || 'Erro desconhecido'}`);
+      }
     }
   };
 
@@ -117,7 +146,11 @@ export default function App() {
       });
     } catch (err: any) {
       console.error("Erro na geração:", err);
-      alert(`Falha ao gerar áudio para o Trecho ${blocks.findIndex(b => b.id === blockId) + 1}.\n\nDetalhes: ${err.message || 'Erro de conexão com o servidor'}`);
+      if (err.message?.includes("API key") || err.message?.includes("Requested entity was not found")) {
+        handleOpenKeySelector();
+      } else {
+        alert(`Falha ao gerar áudio para o Trecho ${blocks.findIndex(b => b.id === blockId) + 1}.\n\nDetalhes: ${err.message || 'Erro de conexão'}`);
+      }
       updateBlock(blockId, { isGenerating: false });
     }
   };
@@ -276,12 +309,21 @@ export default function App() {
               </span>
             </h1>
           </div>
-          <button 
-            onClick={clearAll}
-            className="glass-btn px-4 py-2 rounded-xl text-xs flex items-center gap-2 text-white/50 hover:text-white transition-colors"
-          >
-            <RotateCcw size={14} /> Limpar
-          </button>
+          
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleOpenKeySelector}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${hasApiKey ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-brand-red text-white animate-pulse'}`}
+            >
+              <Key size={14} /> {hasApiKey ? "Chave Ativa" : "Configurar Chave API"}
+            </button>
+            <button 
+              onClick={clearAll}
+              className="glass-btn px-4 py-2 rounded-xl text-xs flex items-center gap-2 text-white/50 hover:text-white transition-colors"
+            >
+              <RotateCcw size={14} /> Limpar
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -315,6 +357,25 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {!hasApiKey && (
+        <div className="mx-4 mb-4 glass-card p-4 rounded-xl flex items-center justify-between border-brand-red bg-brand-red/10">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="text-brand-red" size={20} />
+            <p className="text-xs text-white/80">
+              Você precisa selecionar uma <strong>Chave de API paga</strong> para usar o modelo Gemini 2.5 TTS. 
+              <span className="hidden md:inline ml-1">O uso depende das quotas do seu projeto no Google AI Studio.</span>
+            </p>
+          </div>
+          <a 
+            href="https://ai.google.dev/gemini-api/docs/billing" 
+            target="_blank" 
+            className="flex items-center gap-1 text-[10px] font-bold text-brand-red uppercase tracking-widest hover:underline"
+          >
+            Info Faturamento <ExternalLink size={12} />
+          </a>
+        </div>
+      )}
 
       <main className="flex-1 flex flex-col md:flex-row gap-4 p-4 min-h-0">
         <aside className="w-full md:w-80 glass-card rounded-2xl p-6 flex flex-col gap-6 shadow-2xl">
