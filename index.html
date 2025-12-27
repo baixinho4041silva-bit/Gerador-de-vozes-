@@ -7,7 +7,7 @@
     <title>Edson Automação Gerador de Áudio TTS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -16,6 +16,7 @@
           extend: {
             fontFamily: {
               sans: ['Poppins', 'sans-serif'],
+              pixel: ['"Press Start 2P"', 'cursive'],
             },
             colors: {
               'brand-red': '#f02d4e',
@@ -28,6 +29,7 @@
               'float': 'float 8s ease-in-out infinite',
               'shimmer': 'shimmer 2.5s infinite',
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'glow': 'glow 2s ease-in-out infinite alternate',
             },
             keyframes: {
               gradient: {
@@ -41,6 +43,10 @@
               },
               shimmer: {
                 '100%': { transform: 'translateX(100%)' },
+              },
+              glow: {
+                'from': { textShadow: '0 0 5px #f02d4e, 0 0 10px #f02d4e' },
+                'to': { textShadow: '0 0 10px #ff3b5c, 0 0 20px #ff3b5c' },
               }
             }
           }
@@ -91,6 +97,11 @@
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(240, 45, 78, 0.2); border-radius: 10px; }
       ::-webkit-scrollbar-thumb:hover { background: rgba(240, 45, 78, 0.4); }
+      .pixel-highlight {
+        font-family: 'Press Start 2P', cursive;
+        letter-spacing: 1px;
+        text-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+      }
     </style>
 <script type="importmap">
 {

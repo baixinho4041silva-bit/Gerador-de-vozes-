@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Edson Automação Gerador de Áudio TTS",
+  "name": "Edson Automação Gerador de Áudio TTS",
   "description": "Uma aplicação avançada para geração de áudio TTS utilizando a API do Gemini com recursos de controle global de estilo, sotaque, tom e velocidade.",
   "requestFramePermissions": [
     "microphone"

@@ -240,7 +240,9 @@ export default function App() {
       <header className="relative z-50 glass-card m-4 rounded-2xl p-4 flex flex-col gap-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-widest text-brand-red font-bold mb-1">EDSON AUTOMAÇÃO</span>
+            <span className="pixel-highlight text-[12px] md:text-[14px] text-brand-red font-bold mb-2 animate-glow">
+              EDSON AUTOMAÇÃO
+            </span>
             <h1 className="text-xl md:text-2xl font-bold flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-brand-red flex items-center justify-center text-white shadow-lg shadow-brand-red/30">
                 <Mic2 size={20} />
@@ -504,7 +506,7 @@ export default function App() {
           <div className="w-2 h-2 rounded-full bg-brand-red animate-pulse"></div>
           <p className="text-[10px] text-white/30 font-bold uppercase tracking-[0.2em]">ÁREA DE MEMBROS EXCLUSIVA</p>
         </div>
-        <p className="text-[10px] text-white/30 font-medium">
+        <p className="text-[10px] text-white/30 font-medium text-right">
            Desenvolvido por <span className="text-brand-red font-bold">Edson Automação</span> <span className="mx-2">•</span> 2024
         </p>
       </footer>
