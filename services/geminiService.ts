@@ -15,35 +15,40 @@ export async function generateTTS(
   settings: GlobalSettings,
   audioContext: AudioContext
 ): Promise<AudioBuffer> {
+  // Inicialização conforme diretrizes estritas do SDK
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   const tone = getToneLabel(settings.temperature);
-  // Using the requested format: [Direction: ...] Texto
   const prompt = `[Direction: Style: ${settings.style || 'Natural'}, Accent: ${settings.accent || 'Neutral'}, ${tone}] ${text}`;
 
-  // Use the mapped voice name if it exists, otherwise use the selected name
   const apiVoiceName = VOICE_MAP[settings.voice] || settings.voice;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: prompt }] }],
-    config: {
-      seed: 42, // Fixed seed as requested
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: apiVoiceName },
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        seed: 42,
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: apiVoiceName },
+          },
         },
       },
-    },
-  });
+    });
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  
-  if (!base64Audio) {
-    throw new Error("No audio data returned from Gemini API");
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    
+    if (!base64Audio) {
+      console.error("API Response Details:", response);
+      throw new Error("A API não retornou dados de áudio. Verifique se o texto não viola políticas de segurança ou se há problemas de conexão.");
+    }
+
+    const audioBytes = decode(base64Audio);
+    return await decodeAudioData(audioBytes, audioContext);
+  } catch (error: any) {
+    console.error("Erro na geração Gemini TTS:", error);
+    throw error;
   }
-
-  const audioBytes = decode(base64Audio);
-  return await decodeAudioData(audioBytes, audioContext);
 }

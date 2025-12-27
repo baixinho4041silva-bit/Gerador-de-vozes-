@@ -15,13 +15,15 @@ export async function decodeAudioData(
   sampleRate: number = 24000,
   numChannels: number = 1
 ): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
+  // Garantir alinhamento de 2 bytes para Int16Array
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
+      // Normalização de PCM 16-bit para Float32 (-1.0 a 1.0)
       channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
@@ -33,9 +35,18 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
   const length = buffer.length * numOfChan * 2 + 44;
   const bufferArray = new ArrayBuffer(length);
   const view = new DataView(bufferArray);
-  const channels = [];
   let offset = 0;
   let pos = 0;
+
+  function setUint16(data: number) {
+    view.setUint16(pos, data, true);
+    pos += 2;
+  }
+
+  function setUint32(data: number) {
+    view.setUint32(pos, data, true);
+    pos += 4;
+  }
 
   // write WAVE header
   setUint32(0x46464952); // "RIFF"
@@ -49,12 +60,12 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
   setUint32(buffer.sampleRate);
   setUint32(buffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
   setUint16(numOfChan * 2); // block-align
-  setUint16(16); // 16-bit (hardcoded)
+  setUint16(16); // 16-bit
 
   setUint32(0x61746164); // "data" - chunk
   setUint32(length - pos - 4); // chunk length
 
-  // write interleaved data
+  const channels = [];
   for (let i = 0; i < buffer.numberOfChannels; i++) {
     channels.push(buffer.getChannelData(i));
   }
@@ -70,16 +81,6 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
   }
 
   return new Blob([bufferArray], { type: "audio/wav" });
-
-  function setUint16(data: number) {
-    view.setUint16(pos, data, true);
-    pos += 2;
-  }
-
-  function setUint32(data: number) {
-    view.setUint32(pos, data, true);
-    pos += 4;
-  }
 }
 
 export function mergeAudioBuffers(buffers: AudioBuffer[], ctx: AudioContext): AudioBuffer | null {

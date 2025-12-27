@@ -15,14 +15,14 @@ import {
   FileArchive,
   Music,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 import { GlobalSettings, AudioBlock, VOICES, ToneLabel } from './types';
 import { generateTTS, getToneLabel } from './services/geminiService';
 import { audioBufferToWav, mergeAudioBuffers } from './utils/audioUtils';
 
-// Helper to create initial block
 const createInitialBlock = (): AudioBlock => ({
   id: Math.random().toString(36).substr(2, 9),
   text: '',
@@ -50,13 +50,14 @@ export default function App() {
   const isStoppingRef = useRef(false);
 
   useEffect(() => {
-    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
+      sampleRate: 24000
+    });
     return () => {
       audioContextRef.current?.close();
     };
   }, []);
 
-  // Handlers for global settings
   const handleSpeedChange = (delta: number) => {
     setSettings(prev => ({
       ...prev,
@@ -67,17 +68,19 @@ export default function App() {
   const handlePreviewVoice = async () => {
     if (!audioContextRef.current) return;
     try {
-      const buffer = await generateTTS("Esta é uma prévia da voz selecionada.", settings, audioContextRef.current);
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      const buffer = await generateTTS("Prévia.", settings, audioContextRef.current);
       const source = audioContextRef.current.createBufferSource();
       source.buffer = buffer;
       source.connect(audioContextRef.current.destination);
       source.start();
-    } catch (err) {
-      console.error("Preview failed", err);
+    } catch (err: any) {
+      alert(`Erro na prévia: ${err.message || 'Erro desconhecido'}`);
     }
   };
 
-  // Handlers for individual blocks
   const updateBlock = (id: string, updates: Partial<AudioBlock>) => {
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
   };
@@ -101,6 +104,9 @@ export default function App() {
 
     updateBlock(blockId, { isGenerating: true });
     try {
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
       const buffer = await generateTTS(block.text, settings, audioContextRef.current);
       const blob = audioBufferToWav(buffer);
       const url = URL.createObjectURL(blob);
@@ -109,21 +115,25 @@ export default function App() {
         audioUrl: url, 
         isGenerating: false 
       });
-    } catch (err) {
-      console.error("Generation failed", err);
+    } catch (err: any) {
+      console.error("Erro na geração:", err);
+      alert(`Falha ao gerar áudio para o Trecho ${blocks.findIndex(b => b.id === blockId) + 1}.\n\nDetalhes: ${err.message || 'Erro de conexão com o servidor'}`);
       updateBlock(blockId, { isGenerating: false });
     }
   };
 
-  const playSingleAudio = (block: AudioBlock) => {
+  const playSingleAudio = async (block: AudioBlock) => {
     if (!block.audioBuffer || !audioContextRef.current) return;
     
-    // Stop previous if playing
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+
     currentSourceRef.current?.stop();
     
     const source = audioContextRef.current.createBufferSource();
     source.buffer = block.audioBuffer;
-    source.playbackRate.value = settings.speed * block.playbackSpeed;
+    source.playbackRate.value = block.playbackSpeed;
     
     const gainNode = audioContextRef.current.createGain();
     gainNode.gain.value = block.playbackVolume;
@@ -141,12 +151,12 @@ export default function App() {
     currentSourceRef.current = source;
   };
 
-  // Batch actions
   const generateAll = async () => {
-    for (const block of blocks) {
-      if (block.text && !block.audioBuffer) {
-        await generateSingleAudio(block.id);
-      }
+    const ungenerated = blocks.filter(b => b.text && !b.audioBuffer);
+    if (ungenerated.length === 0) return;
+    
+    for (const block of ungenerated) {
+      await generateSingleAudio(block.id);
     }
   };
 
@@ -164,9 +174,19 @@ export default function App() {
       return;
     }
 
+    const available = blocks.filter(b => b.audioBuffer);
+    if (available.length === 0) {
+      alert("Gere os áudios primeiro antes de reproduzir tudo.");
+      return;
+    }
+
     setIsPlayingAll(true);
     isStoppingRef.current = false;
     
+    if (audioContextRef.current?.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+
     for (let i = 0; i < blocks.length; i++) {
       if (isStoppingRef.current) break;
       
@@ -175,7 +195,7 @@ export default function App() {
         setCurrentPlayingIndex(i);
         const source = audioContextRef.current.createBufferSource();
         source.buffer = block.audioBuffer;
-        source.playbackRate.value = settings.speed * block.playbackSpeed;
+        source.playbackRate.value = block.playbackSpeed;
         source.connect(audioContextRef.current.destination);
         
         const playPromise = new Promise<void>((resolve) => {
@@ -196,47 +216,51 @@ export default function App() {
 
   const downloadZip = async () => {
     const zip = new JSZip();
+    let hasFiles = false;
     blocks.forEach((block, idx) => {
       if (block.audioBuffer) {
         const wavBlob = audioBufferToWav(block.audioBuffer);
-        zip.file(`audio_${idx + 1}.wav`, wavBlob);
+        zip.file(`trecho_${idx + 1}.wav`, wavBlob);
+        hasFiles = true;
       }
     });
+    if (!hasFiles) return;
     const content = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(content);
     const a = document.createElement('a');
     a.href = url;
-    a.download = "audios_tts.zip";
+    a.download = "edson_tts_pacote.zip";
     a.click();
   };
 
   const downloadMerged = () => {
     if (!audioContextRef.current) return;
     const validBuffers = blocks.map(b => b.audioBuffer).filter((b): b is AudioBuffer => b !== null);
+    if (validBuffers.length === 0) return;
     const merged = mergeAudioBuffers(validBuffers, audioContextRef.current);
     if (merged) {
       const blob = audioBufferToWav(merged);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = "faixa_unica.wav";
+      a.download = "faixa_completa_edson.wav";
       a.click();
     }
   };
 
   const clearAll = () => {
-    setBlocks([createInitialBlock()]);
-    stopPlayback();
+    if (confirm("Deseja realmente limpar todos os trechos e configurações?")) {
+      setBlocks([createInitialBlock()]);
+      stopPlayback();
+    }
   };
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-dark-bg">
-      {/* Background elements adjusted for new palette */}
       <div className="fixed inset-0 bg-gradient-to-br from-[#120505] via-dark-bg to-[#0d0d12] -z-10"></div>
       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-brand-red rounded-full mix-blend-screen filter blur-[100px] opacity-10 animate-float -z-10"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-brand-red-light rounded-full mix-blend-screen filter blur-[120px] opacity-10 animate-float -z-10" style={{ animationDelay: '-3s' }}></div>
 
-      {/* Header Section (Fixed Top) */}
       <header className="relative z-50 glass-card m-4 rounded-2xl p-4 flex flex-col gap-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
@@ -292,9 +316,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="flex-1 flex flex-col md:flex-row gap-4 p-4 min-h-0">
-        {/* Left Column (Settings) */}
         <aside className="w-full md:w-80 glass-card rounded-2xl p-6 flex flex-col gap-6 shadow-2xl">
           <div className="space-y-4">
             <label className="text-[10px] uppercase tracking-[0.2em] text-brand-red font-bold flex items-center gap-2 border-b border-brand-red/20 pb-2">
@@ -376,16 +398,8 @@ export default function App() {
               />
             </div>
           </div>
-
-          <div className="mt-auto pt-4 border-t border-white/5">
-             <div className="flex items-center gap-3 text-[9px] text-white/30 uppercase tracking-widest font-bold">
-               <div className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse"></div>
-               Sincronizado com API
-             </div>
-          </div>
         </aside>
 
-        {/* Right Column (Scrollable Blocks) */}
         <section className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar">
           {blocks.map((block, index) => (
             <div 
